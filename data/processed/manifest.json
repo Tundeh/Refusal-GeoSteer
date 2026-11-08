@@ -1,5 +1,5 @@
 {
-  "created": "2026-11-08T14:12:05+00:00",
+  "created": "2026-11-08T14:45:57+00:00",
   "config_file": "configs/data.yaml",
   "config": {
     "seed": 20261108,
@@ -101,6 +101,10 @@
           192
         ]
       }
+    },
+    "budgets": {
+      "direction": null,
+      "repair": null
     }
   },
   "provenance": {

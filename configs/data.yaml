@@ -53,3 +53,9 @@ nested_subsets:
   repair:
     strata: [harmful, alarming_benign, benign]
     sizes: [24, 48, 96, 192]
+
+# Default data budgets (number of prompts, balanced across strata; null = whole role).
+# Override per run, e.g. `compute_geometry.py --budget 100`. Selection is nested: budget 50 is a subset of 100.
+budgets:
+  direction: null
+  repair: null

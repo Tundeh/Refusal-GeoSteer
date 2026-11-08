@@ -17,6 +17,11 @@ from transformers import PreTrainedTokenizerBase
 
 POSITIONS = ("t_inst", "t_post")
 
+# Same system prompt as refusal-vs-safety-signal [1] (src/prompting.py). Without one, Qwen2.5's template
+# injects "You are Qwen, created by Alibaba Cloud..." and Llama-3.x's leaves the system block empty, so
+# the two backbones would be read under different instructions.
+DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
+
 # Llama-3.x templates stamp "Today Date" via strftime_now() when date_string is
 # unset, which makes prompts (and activations) depend on the run date.
 DEFAULT_TEMPLATE_KWARGS = {"date_string": "26 Jul 2024"}
@@ -38,7 +43,7 @@ class FormattedPrompt:
 class PromptFormatter:
     """Renders single-turn chat prompts and locates t_inst / t_post."""
 
-    def __init__(self, tokenizer: PreTrainedTokenizerBase, system_prompt: str | None = None,
+    def __init__(self, tokenizer: PreTrainedTokenizerBase, system_prompt: str | None = DEFAULT_SYSTEM_PROMPT,
                  template_kwargs: dict | None = None):
         if not tokenizer.is_fast:
             raise ValueError("A fast tokenizer is required for offset mapping")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from geosteer.data.budget import select_budget
 from geosteer.data.schema import PromptRecord
 from geosteer.utils import data_dir, read_json, read_jsonl
 
@@ -12,8 +13,14 @@ def processed_dir() -> Path:
     return data_dir() / "processed"
 
 
-def load_role(role: str, subset: int | str | None = None, root: Path | None = None) -> list[PromptRecord]:
-    """Records of one split role, optionally restricted to a frozen nested subset (e.g. tuning, 48)."""
+def load_role(role: str, subset: int | str | None = None, root: Path | None = None,
+              budget: int | None = None, budget_seed: int | None = None) -> list[PromptRecord]:
+    """Records of one split role.
+
+    ``subset``: a frozen nested subset listed in split_ids.json (e.g. repair, 48).
+    ``budget``: a balanced nested subset of N prompts (see data/budget.py), seeded by the
+    split seed unless ``budget_seed`` is given. Applied after ``subset``.
+    """
     root = root or processed_dir()
     ids = load_split_ids(root)
     if role not in ids["files"]:
@@ -24,7 +31,14 @@ def load_role(role: str, subset: int | str | None = None, root: Path | None = No
         recs = [r for r in recs if r.uid in keep]
         if len(recs) != len(keep):
             raise RuntimeError(f"{role}/{subset}: manifest lists {len(keep)} uids, found {len(recs)}")
+    if budget is not None:
+        seed = budget_seed if budget_seed is not None else split_seed(root)
+        recs = select_budget(recs, budget, seed, name=role)
     return recs
+
+
+def split_seed(root: Path | None = None) -> int:
+    return read_json((root or processed_dir()) / "manifest.json")["config"]["seed"]
 
 
 def roles_by_stage(root: Path | None = None) -> dict[str, list[str]]:

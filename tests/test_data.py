@@ -85,3 +85,26 @@ def test_nested_subsets_are_nested_and_balanced():
     assert Counter(by_uid[u].stratum for u in subs[24]) == {s: 8 for s in strata}
     with pytest.raises(ValueError):
         nested_subsets(rs, [7], strata, seed=0)
+
+
+def test_budget_is_balanced_nested_and_deterministic():
+    from geosteer.data import select_budget
+    rs = _pool()
+    b30 = select_budget(rs, 30, seed=3)
+    b60 = select_budget(rs, 60, seed=3)
+    assert Counter(r.stratum for r in b30) == {Stratum.HARMFUL: 10, Stratum.ALARMING_BENIGN: 10, Stratum.BENIGN: 10}
+    assert {r.uid for r in b30} < {r.uid for r in b60}
+    assert [r.uid for r in b30] == [r.uid for r in select_budget(rs, 30, seed=3)]
+    assert len(select_budget(rs, 100, seed=3)) == 100  # remainder spread over strata (34/33/33)
+    assert select_budget(rs, None, seed=3) == rs
+    with pytest.raises(ValueError):
+        select_budget(rs, 1000, seed=3)
+
+
+def test_budget_keeps_shared_group_pairs_together():
+    from geosteer.data import select_budget
+    # harmful h{i} and benign twin b{i} share group g{i}: same hash rank in both strata
+    sel = select_budget(_pool(), 30, seed=5)
+    h = {r.group_id for r in sel if r.stratum == Stratum.HARMFUL}
+    b = {r.group_id for r in sel if r.stratum == Stratum.ALARMING_BENIGN}
+    assert h == b

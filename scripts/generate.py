@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from geosteer.data import load_role
-from geosteer.processing import PromptFormatter, generate_responses, generation_meta, load_model
+from geosteer.processing import DEFAULT_SYSTEM_PROMPT, PromptFormatter, generate_responses, generation_meta, load_model
 from geosteer.utils import artifact_path, get_logger, load_config, project_path, set_seed, write_json, write_jsonl
 
 log = get_logger("generate")
@@ -31,7 +31,7 @@ def main() -> None:
     ap.add_argument("--dtype", default="bf16")
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--max-new-tokens", type=int, default=256)
-    ap.add_argument("--system-prompt", default=None)
+    ap.add_argument("--system-prompt", default=DEFAULT_SYSTEM_PROMPT, help='"none" = template default')
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
@@ -39,7 +39,7 @@ def main() -> None:
     mcfg = load_config(project_path("configs", "models.yaml"))[args.model]
     model, tok = load_model(args.weights or mcfg["id"], None if args.weights else mcfg["revision"], args.dtype,
                             args.device)
-    formatter = PromptFormatter(tok, system_prompt=args.system_prompt)
+    formatter = PromptFormatter(tok, system_prompt=None if args.system_prompt.lower() == "none" else args.system_prompt)
     records = load_role(args.role, subset=args.subset)
     log.info("%s/%s: generating for %d prompts (%s)", args.model, args.variant, len(records), args.role)
 

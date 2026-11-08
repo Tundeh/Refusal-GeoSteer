@@ -103,3 +103,14 @@ def test_bootstrap_identity_weights_reproduce_point_estimate():
 
 def test_angle_deg_clamps():
     assert angle_deg(1.0000001) == 0.0 and angle_deg(-1.5) == 180.0
+
+
+def test_d_matched_uses_only_matched_pairs():
+    X, lab = synthetic()
+    lab.matched = np.zeros(len(lab.harm), dtype=bool)
+    assert not contrast_direction(X, lab, "d_matched", min_count=5).available
+    lab.matched[:200] = True
+    d = contrast_direction(X, lab, "d_matched", min_count=5)
+    assert d.available and d.n_pos + d.n_neg == 200
+    row = geometry_row(X, X, lab, d_name="d_matched", n_boot=50)
+    assert row["available"] and not np.isnan(row["theta_dc"])

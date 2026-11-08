@@ -71,3 +71,34 @@ Notes:
   within-cell (cross-)covariance trace from inner products and squared norms, with a group bootstrap that accounts
   for resampling weights. Rows with `reliable == False` (too many replicates with less signal than noise) should
   not be interpreted.
+
+# Alignment with refusal-vs-safety-signal
+
+Angle extraction is cross-checked against [fw2274/refusal-vs-safety-signal](https://github.com/fw2274/refusal-vs-safety-signal)
+(commit `53cd177`, README §4.2-4.4, `src/extract/activations.py`, `src/prompting.py`, `src/probes/project.py`).
+
+| Aspect | refusal-vs-safety-signal | This repo | Status |
+|---|---|---|---|
+| Token position | last prompt token after `add_generation_prompt` | `t_post` (same); `t_inst` added | aligned |
+| Layer convention | `L = 1..n` = `hidden_states[L]` | `layer = 0..n-1` = output of block `layer`; CSV column `layer_1idx = layer + 1` | aligned for `L < n`; their `L = n` is post-final-norm, ours pre-norm (verified numerically) |
+| Padding | left padding, `position_ids` from attention mask, batched vs unpadded check | same | aligned |
+| Precision | bf16 forward, fp32 arithmetic | bf16 forward, fp32 storage, fp64 means | aligned |
+| System prompt | `"You are a helpful assistant."` | same (`DEFAULT_SYSTEM_PROMPT`); previously template default | aligned |
+| Llama date | pinned `26 Jul 2024` | same | aligned |
+| Refusal direction r | unit(mean safe&refused − mean safe&answered) | `r`, same formula | aligned |
+| Harm direction d | unit(mean harmful − mean safe) on a **topic-matched** corpus (XSTest contrasts + JBB pairs) | `d_matched`: same formula on complete JBB pairs in the direction pool; `d` (unconditioned, all strata) kept as the plan's primary | aligned in construction; XSTest is reserved for testing here (plan §4) |
+| Angle | `acos(cos(r, d))`, point estimate | same plain `theta`, plus group-bootstrap CI and noise-corrected `theta_dc` | superset |
+| Refusal labels | **taught** policy labels of a cue-arm LoRA model | **observed** labels (LLM judge + keyword consensus) of each model variant | intentional difference (plan §5); our base-model r is their proposed follow-up (§6.3) |
+| Model | cue-arm fine-tune | base model now; cue/degraded variants later (plan §3) | pending |
+| Fitting split | r and d from train rows only (probes evaluated on held-out) | all rows of the direction role, or a budget subset | differs; matters only once probes are added |
+
+Numerical check, r vs `d_matched` at the last prompt token (degrees; theirs = cue-arm model, plain angle, README §5.1/5.5;
+ours = base model, observed refusal, 600-prompt direction pool):
+
+| Model | Layer (1-idx) | theirs | ours plain | ours noise-corrected |
+|---|---|---|---|---|
+| Qwen2.5-1.5B | 4 / 9 / 13 / 17 / 25 | 99 / 86 / 61 / 34 / 30 | 70 / 63 / 64 / 41 / 34 | 64 / 57 / 60 / 38 / 30 |
+| Llama-3.2-1B | 3 / 5 / 9 / 12 / 15 | 79 / 49 / 40 / 42 / 46 | 57 / 44 / 46 / 44 / 41 | 44 / 32 / 41 / 40 / 37 |
+
+Mid-to-late layers agree within a few degrees; early layers are less orthogonal in our base models. Expected sources:
+different model (cue-arm LoRA vs base), taught vs observed refusal labels, and their d corpus adding XSTest contrasts.
