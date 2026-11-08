@@ -121,15 +121,34 @@ class GroupBootstrap:
         return out
 
 
-def bootstrap_angle(boot_a: torch.Tensor, boot_b: torch.Tensor, alpha: float = 0.05) -> dict:
+def bootstrap_angle(boot_a: torch.Tensor, boot_b: torch.Tensor, alpha: float = 0.05,
+                    theta_point: float | None = None) -> dict:
+    """Bootstrap summary of the angle between paired replicate directions.
+
+    Estimation noise in difference-of-means vectors pushes angles toward 90 deg, and
+    replicates carry *more* noise than the point estimate, so the percentile interval
+    (``theta_lo/hi``) is shifted. With ``theta_point`` we also report the bootstrap
+    bias estimate (mean replicate - point), a bias-corrected angle, and the basic
+    bootstrap interval ``2*theta - q`` (``theta_basic_lo/hi``), which is the one to use
+    for small contrast cells.
+    """
     cos = (boot_a * boot_b).sum(-1)
     cos = cos[~torch.isnan(cos)].numpy()
+    nan = float("nan")
     if cos.size == 0:
-        return {"cos_lo": float("nan"), "cos_hi": float("nan"), "theta_lo": float("nan"),
-                "theta_hi": float("nan"), "n_valid": 0}
+        return {"cos_lo": nan, "cos_hi": nan, "theta_lo": nan, "theta_hi": nan, "n_valid": 0}
     lo, hi = np.quantile(cos, [alpha / 2, 1 - alpha / 2])
-    return {"cos_lo": float(lo), "cos_hi": float(hi), "theta_lo": angle_deg(hi), "theta_hi": angle_deg(lo),
-            "cos_sd": float(cos.std(ddof=1)) if cos.size > 1 else float("nan"), "n_valid": int(cos.size)}
+    out = {"cos_lo": float(lo), "cos_hi": float(hi), "theta_lo": angle_deg(hi), "theta_hi": angle_deg(lo),
+           "cos_sd": float(cos.std(ddof=1)) if cos.size > 1 else nan, "n_valid": int(cos.size)}
+    if theta_point is not None:
+        thetas = np.degrees(np.arccos(np.clip(cos, -1.0, 1.0)))
+        q_lo, q_hi = np.quantile(thetas, [alpha / 2, 1 - alpha / 2])
+        bias = float(thetas.mean() - theta_point)
+        out.update(theta_sd=float(thetas.std(ddof=1)) if thetas.size > 1 else nan, theta_bias=bias,
+                   theta_bc=float(np.clip(theta_point - bias, 0, 180)),
+                   theta_basic_lo=float(np.clip(2 * theta_point - q_hi, 0, 180)),
+                   theta_basic_hi=float(np.clip(2 * theta_point - q_lo, 0, 180)))
+    return out
 
 
 def direction_stability(boot: torch.Tensor, point: torch.Tensor) -> float:
@@ -137,6 +156,99 @@ def direction_stability(boot: torch.Tensor, point: torch.Tensor) -> float:
     c = boot @ point.double()
     c = c[~torch.isnan(c)]
     return float(c.median()) if c.numel() else float("nan")
+
+
+class DebiasedCosine:
+    """Noise-corrected cosine between two difference-of-means contrasts.
+
+    Write each example as x_i = m_c(i) + e_i, with c the fine cell (harm, refused in
+    {0, 1, NaN}). A contrast is r_hat = sum_i a_i x_i (a_i = +1/n_pos, -1/n_neg, 0), so
+    E<r_hat, d_hat> = <r, d> + sum_c n_c a_c b_c tr Cov_c(x_r, x_d): estimation noise
+    inflates both norms (and, where contrasts share examples, the inner product),
+    pulling the plain cosine toward 0 / the angle toward 90 deg. We subtract the
+    within-cell (cross-)covariance traces from the inner product and squared norms.
+    For cross-token geometry the cross-covariance between positions is used.
+
+    Group bootstrap replicates reuse the same per-group sufficient statistics.
+    Within-group correlation (e.g. paired JBB prompts) is ignored in the bias term.
+    """
+
+    def __init__(self, X_r: torch.Tensor, X_d: torch.Tensor, labels: Labels, r_name: str, d_name: str):
+        self.r_name, self.d_name = r_name, d_name
+        _, g_idx = np.unique(labels.groups, return_inverse=True)
+        G = int(g_idx.max()) + 1
+        g_idx = torch.from_numpy(g_idx)
+        Xr, Xd = X_r.double(), X_d.double()
+        ref = labels.refused if labels.refused is not None else np.full(len(labels.harm), np.nan)
+        ref_cat = np.where(np.isnan(ref), -1, np.nan_to_num(ref, nan=-1)).astype(int)
+        (rp, rn), (dp, dn) = CONTRASTS[r_name], CONTRASTS[d_name]
+        self.cells = []
+        for h in (0, 1):
+            for rc in (-1, 0, 1):
+                m = (labels.harm == h) & (ref_cat == rc)
+                if not m.any():
+                    continue
+                rep = {"harm": h, "refused": rc if rc >= 0 else math.nan}
+                a = 1 if self._match(rp, rep) else (-1 if self._match(rn, rep) else 0)
+                b = 1 if self._match(dp, rep) else (-1 if self._match(dn, rep) else 0)
+                if a == 0 and b == 0:
+                    continue
+                mt = torch.from_numpy(m)
+                gi = g_idx[mt]
+                def gsum(v):
+                    out = torch.zeros((G,) + v.shape[1:], dtype=torch.float64)
+                    return out.index_add_(0, gi, v)
+                self.cells.append({
+                    "a": a, "b": b, "n": torch.bincount(gi, minlength=G).double(),
+                    "Sr": gsum(Xr[mt]), "Sd": gsum(Xd[mt]),
+                    "Qrr": gsum((Xr[mt] ** 2).sum(-1)), "Qdd": gsum((Xd[mt] ** 2).sum(-1)),
+                    "Qrd": gsum((Xr[mt] * Xd[mt]).sum(-1))})
+        self.G = G
+
+    @staticmethod
+    def _match(spec: dict, rep: dict) -> bool:
+        if rep["harm"] != spec["harm"]:
+            return False
+        return "refused" not in spec or rep["refused"] == spec["refused"]
+
+    def __call__(self, W: torch.Tensor | None = None) -> torch.Tensor:
+        """Debiased cosines, one per row of W ([B, G] group multiplicities; None = original sample)."""
+        W = torch.ones(1, self.G, dtype=torch.float64) if W is None else W.double()
+        B = W.shape[0]
+        stats = []
+        for c in self.cells:
+            # Replicate weights act as frequency weights w_i (shared within a group). For iid x_i,
+            # E||sum w x / sum w - m||^2 = v * sum w^2 / (sum w)^2, and the unbiased variance uses
+            # denominator sum w - sum w^2 / sum w. Both reduce to the usual n and n-1 when W = 1.
+            n = W @ c["n"]
+            n2 = (W * W) @ c["n"]
+            Sr, Sd = W @ c["Sr"], W @ c["Sd"]
+            den = (n - n2 / n.clamp_min(1)).clamp_min(1e-12)
+            v = {k: (W @ c["Q" + k] - (S1 * S2).sum(-1) / n.clamp_min(1)) / den
+                 for k, S1, S2 in (("rr", Sr, Sr), ("dd", Sd, Sd), ("rd", Sr, Sd))}
+            stats.append((c, n2, Sr, Sd, v, n))
+        def contrast(key, S_key):
+            pos_n = sum(st[5] for st in stats if st[0][key] == 1)
+            neg_n = sum(st[5] for st in stats if st[0][key] == -1)
+            S_idx = 2 if S_key == "Sr" else 3
+            mu_p = sum(st[S_idx] for st in stats if st[0][key] == 1) / pos_n[:, None]
+            mu_n = sum(st[S_idx] for st in stats if st[0][key] == -1) / neg_n[:, None]
+            w = [(c[key] / pos_n if c[key] == 1 else (-1 / neg_n if c[key] == -1 else torch.zeros(B, dtype=torch.float64)))
+                 for c, *_ in stats]
+            return mu_p - mu_n, w, pos_n, neg_n
+        r, wa, rpn, rnn = contrast("a", "Sr")
+        d, wb, dpn, dnn = contrast("b", "Sd")
+        bias = {k: torch.zeros(B, dtype=torch.float64) for k in ("rr", "dd", "rd")}
+        for (c, n2, _, _, v, _), a, b in zip(stats, wa, wb):
+            bias["rr"] += n2 * a * a * v["rr"]
+            bias["dd"] += n2 * b * b * v["dd"]
+            bias["rd"] += n2 * a * b * v["rd"]
+        nr = (r * r).sum(-1) - bias["rr"]
+        nd = (d * d).sum(-1) - bias["dd"]
+        cos = ((r * d).sum(-1) - bias["rd"]) / (nr.clamp_min(0) * nd.clamp_min(0)).sqrt()
+        bad = (nr <= 0) | (nd <= 0) | (rpn == 0) | (rnn == 0) | (dpn == 0) | (dnn == 0)
+        cos[bad] = float("nan")
+        return cos.clamp(-1, 1)
 
 
 def geometry_row(X_r: torch.Tensor, X_d: torch.Tensor, labels: Labels, r_name: str = "r", d_name: str = "d",
@@ -159,8 +271,18 @@ def geometry_row(X_r: torch.Tensor, X_d: torch.Tensor, labels: Labels, r_name: s
         bs_r = GroupBootstrap(X_r, labels, n_boot, seed)
         bs_d = bs_r if X_d is X_r else GroupBootstrap(X_d, labels, n_boot, seed)  # same seed -> same group draws
         br, bd = bs_r.directions(r_name), bs_d.directions(d_name)
-        row.update(bootstrap_angle(br, bd))
+        row.update(bootstrap_angle(br, bd, theta_point=row["theta"]))
         row.update(r_stability=direction_stability(br, r.vector), d_stability=direction_stability(bd, d.vector))
+    dc = DebiasedCosine(X_r, X_d, labels, r_name, d_name)
+    c_dc = float(dc()[0])
+    row.update(cos_dc=c_dc, theta_dc=angle_deg(c_dc) if not math.isnan(c_dc) else float("nan"))
+    if n_boot:
+        reps = dc(bs_r.W).numpy()
+        ok = reps[~np.isnan(reps)]
+        row["dc_valid_frac"] = float(ok.size / reps.size)
+        if ok.size:
+            lo, hi = np.quantile(ok, [0.025, 0.975])
+            row.update(theta_dc_lo=angle_deg(hi), theta_dc_hi=angle_deg(lo))
     return row
 
 

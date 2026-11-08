@@ -31,6 +31,35 @@ def test_recovers_known_angle():
     assert row["r_stability"] > 0.99
 
 
+def _noisy(seed):
+    torch.manual_seed(seed)
+    X, lab = synthetic(n=80, d=512, angle=30, seed=seed)  # true angle 30 deg, few examples, 512 dims
+    return X + 0.6 * torch.randn_like(X), lab
+
+
+def test_small_cells_inflate_plain_angle_and_debiased_cosine_corrects():
+    rows = [geometry_row(X, X, lab, min_count=5, n_boot=0) for X, lab in map(_noisy, range(10))]
+    plain = np.mean([r["theta"] for r in rows])
+    dc = np.mean([r["theta_dc"] for r in rows])
+    assert plain > 60                 # noise pulls the plain angle toward 90 deg
+    assert abs(dc - 30) < 6           # noise-corrected estimate is roughly unbiased
+
+
+def test_bias_diagnostics_and_debiased_interval():
+    X, lab = _noisy(0)
+    row = geometry_row(X, X, lab, min_count=5, n_boot=500)
+    assert row["theta_bias"] > 0 and row["theta_bc"] < row["theta"]
+    assert row["theta_basic_lo"] < row["theta_lo"]
+    assert row["theta_dc_lo"] <= 30 <= row["theta_dc_hi"]
+    assert row["dc_valid_frac"] > 0.9
+
+
+def test_debiased_cosine_matches_plain_when_noise_free():
+    X, lab = synthetic(angle=45)
+    row = geometry_row(X, X, lab, n_boot=0)
+    assert abs(row["theta_dc"] - row["theta"]) < 1
+
+
 def test_unconditioned_d_absorbs_refusal_imbalance():
     """If every harmful prompt is refused, d = harm axis + refusal axis (the confound §5 warns about)."""
     n, dim = 400, 32

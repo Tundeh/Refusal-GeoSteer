@@ -55,8 +55,9 @@ def main() -> None:
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--partial-as", type=float, default=math.nan, help="refused value for partial refusals")
     ap.add_argument("--min-confidence", type=float, default=0.0, help="below this judge prob -> NaN")
-    ap.add_argument("--override-confidence", type=float, default=0.99,
-                    help="judge confidence needed to overrule the keyword heuristic; <0 disables the consensus rule")
+    ap.add_argument("--override-confidence", type=float, default=None,
+                    help="judge confidence that overrules the keyword heuristic (default: never; disagreement -> NaN)")
+    ap.add_argument("--judge-only", action="store_true", help="ignore the keyword heuristic (no consensus rule)")
     ap.add_argument("--audit-per-cell", type=int, default=10)
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
@@ -75,9 +76,8 @@ def main() -> None:
     rows = []
     for g, v in zip(gens, verdicts):
         kw = keyword_refusal(g["response"])
-        override = None if args.override_confidence < 0 else args.override_confidence
         refused = to_binary(v["judge_label"], v["judge_confidence"], args.partial_as, args.min_confidence,
-                            keyword=kw, override_confidence=override)
+                            keyword=None if args.judge_only else kw, override_confidence=args.override_confidence)
         rows.append({"uid": g["uid"], "refused": None if math.isnan(refused) else int(refused), **v,
                      "keyword_refused": kw, "finish_reason": g["finish_reason"],
                      "response": g["response"]})
@@ -87,7 +87,8 @@ def main() -> None:
     report = agreement_report(rows, [recs[r["uid"]].stratum for r in rows])
     n_audit = write_audit(rows, recs, out.with_suffix(".audit.csv"), args.audit_per_cell, args.seed)
     write_json({**judge.describe(), "partial_as": args.partial_as, "min_confidence": args.min_confidence,
-                "override_confidence": args.override_confidence, "model_key": args.model, "variant": args.variant, "role": args.role, "subset": args.subset,
+                "override_confidence": args.override_confidence,
+                "judge_only": args.judge_only, "model_key": args.model, "variant": args.variant, "role": args.role, "subset": args.subset,
                 "n": len(rows), "n_refused_nan": sum(r["refused"] is None for r in rows), "n_audit": n_audit,
                 "agreement": report}, out.with_suffix(".meta.json"))
     for s, rep in report.items():

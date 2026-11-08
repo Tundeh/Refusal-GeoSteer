@@ -63,6 +63,11 @@ Notes:
 * Sorry-Bench (HF) is gated: until access is granted, the loader falls back to the 440-prompt copy redistributed by Zhao et al. and records this in `manifest.json`.
 * Observed refusal labels are model-specific (`artifacts/labels/<model>/<variant>/`), not part of the split files.
   Judge = Qwen2.5-7B-Instruct, prompt v2, read from A/B/C logits. A judge call that contradicts the keyword
-  heuristic with confidence < 0.99 becomes NaN; partial refusals are NaN by default. Each run writes a blinded
+  heuristic becomes NaN; partial refusals are NaN by default. Each run writes a blinded
   `*.audit.csv` for human review. Meta-Llama-3-8B-Instruct is not suitable as judge (it labels terse refusals of
   severe harmful requests as compliance).
+* Geometry reports the plain angle `theta` and a noise-corrected angle `theta_dc` (primary). Plain cosines between
+  noisy mean-difference vectors are pulled toward 90 deg when contrast cells are small; `theta_dc` subtracts the
+  within-cell (cross-)covariance trace from inner products and squared norms, with a group bootstrap that accounts
+  for resampling weights. Rows with `reliable == False` (too many replicates with less signal than noise) should
+  not be interpreted.

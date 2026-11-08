@@ -34,6 +34,8 @@ def main() -> None:
     ap.add_argument("--role", default="direction")
     ap.add_argument("--min-count", type=int, default=20)
     ap.add_argument("--n-boot", type=int, default=1000)
+    ap.add_argument("--min-valid-frac", type=float, default=0.95,
+                    help="min fraction of bootstrap replicates with a defined noise-corrected cosine")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
@@ -58,18 +60,24 @@ def main() -> None:
         rows += layerwise_geometry(acts, lab, r_name=r_name, d_name=d_name, min_count=args.min_count,
                                    n_boot=args.n_boot, seed=args.seed)
     df = pd.DataFrame(rows)
+    # theta_dc (noise-corrected) is the primary angle; plain theta is inflated toward 90 deg by estimation
+    # noise in small cells. A row is unreliable when many bootstrap replicates have less signal than noise.
+    df["reliable"] = df.available & (df.get("dc_valid_frac", 1.0) >= args.min_valid_frac)
     out = artifact_path("geometry", args.model, args.variant, f"{args.role}.csv")
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out, index=False)
-    write_json({"cells": cells, "min_count": args.min_count, "n_boot": args.n_boot, "seed": args.seed,
+    write_json({"cells": cells, "min_count": args.min_count, "min_valid_frac": args.min_valid_frac, "n_boot": args.n_boot, "seed": args.seed,
                 "contrast_pairs": CONTRAST_PAIRS, "activations_meta": {k: v for k, v in acts.meta.items()
                                                                         if k != "seq_lens"}},
                out.with_suffix(".meta.json"))
 
     prim = df[(df.r_name == "r") & (df.d_name == "d") & df.available]
     if len(prim):
-        view = prim.pivot(index="layer", columns=["r_pos", "d_pos"], values="theta").round(1)
-        log.info("theta(r, d) in degrees by layer:\n%s", view.to_string())
+        view = prim.pivot(index="layer", columns=["r_pos", "d_pos"], values="theta_dc").round(1)
+        log.info("noise-corrected theta(r, d) in degrees by layer:\n%s", view.to_string())
+        n_unrel = int((~prim.reliable).sum())
+        if n_unrel:
+            log.warning("%d/%d primary rows unreliable (dc_valid_frac < %.2f)", n_unrel, len(prim), args.min_valid_frac)
     else:
         log.warning("primary r vs d unavailable: %s", df[(df.r_name == "r") & (df.d_name == "d")].reason.iloc[0])
     log.info("wrote %s", out)
