@@ -121,3 +121,23 @@ def test_add_hook_prefill_only(small_model):
     with forward_hooks(model, [(layer, grab)]):
         model(ids[:, :1])
     assert torch.equal(h1, store["h"])
+
+
+@pytest.mark.model
+def test_generation_and_prefill_steering(small_model):
+    from geosteer.processing import generate_responses
+    model, tok = small_model
+    f = PromptFormatter(tok)
+    recs = _records()[:3]
+    base = generate_responses(model, f, recs, max_new_tokens=12, batch_size=3, show_progress=False)
+    assert [r["uid"] for r in base] == [r.uid for r in recs]
+    assert all(r["finish_reason"] in ("stop", "length") and r["n_new_tokens"] <= 12 for r in base)
+    calls = []
+    v = torch.randn(model.config.hidden_size) * 200
+    def hooks_fn(batch):
+        calls.append(batch["index"].shape)
+        return [(10, make_add_hook(v, batch["index"][:, [1]]))]  # steer at t_post, prefill only
+    steered = generate_responses(model, f, recs, max_new_tokens=12, batch_size=3, hooks_fn=hooks_fn,
+                                 show_progress=False)
+    assert calls == [torch.Size([3, 2])]
+    assert any(a["response"] != b["response"] for a, b in zip(base, steered))

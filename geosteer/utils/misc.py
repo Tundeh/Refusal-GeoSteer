@@ -30,6 +30,11 @@ def artifacts_dir() -> Path:
     return Path(os.environ.get("GEOSTEER_ARTIFACTS_DIR", project_path("artifacts")))
 
 
+def artifact_path(kind: str, model_key: str, variant: str, name: str) -> Path:
+    """artifacts/<kind>/<model_key>/<variant>/<name>, e.g. ("labels", "qwen2.5-1.5b", "base", "direction.jsonl")."""
+    return artifacts_dir() / kind / model_key / variant / name
+
+
 def load_config(path: str | Path) -> dict[str, Any]:
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)

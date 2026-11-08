@@ -17,5 +17,6 @@ from geosteer.processing.extraction import (
     load_model,
     verify_batched_extraction,
 )
+from geosteer.processing.generation import GREEDY, generate_responses, generation_meta
 from geosteer.processing.formatting import POSITIONS, FormattedPrompt, PromptFormatter
 from geosteer.processing.hooks import HOOK_POINT, forward_hooks, get_decoder_layers, make_add_hook, make_capture_hook

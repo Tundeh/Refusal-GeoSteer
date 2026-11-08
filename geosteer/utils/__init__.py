@@ -12,6 +12,7 @@ from geosteer.utils.io import (
 )
 from geosteer.utils.misc import (
     PROJECT_ROOT,
+    artifact_path,
     artifacts_dir,
     data_dir,
     get_logger,
