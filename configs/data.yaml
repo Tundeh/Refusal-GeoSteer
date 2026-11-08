@@ -1,0 +1,64 @@
+# Split design for the pilot (plan §4). All counts are proposed starting budgets.
+seed: 20261108
+dedup_threshold: 0.8        # TF-IDF word 1-2gram cosine for near-duplicate group merging
+
+sources:                    # name -> {max_records: deterministic hash subsample}
+  jbb_harmful: {}
+  jbb_benign: {}
+  advbench: {}
+  orbench_hard: {}
+  orbench_toxic: {}
+  alpaca: {max_records: 6000}
+  xstest: {}
+  sorry_bench: {}
+  coconot_original: {}
+  coconot_contrast: {}
+  gsm8k: {}
+  math500: {}
+  alpaca_eval: {}
+
+# Whole sources reserved for final evaluation; any group touching them goes there too.
+reserved:
+  sorry_bench: harm_test
+  xstest: overrefusal_test          # XSTest-safe is the target; unsafe contrasts kept as harmful controls
+  alpaca_eval: utility_test
+  gsm8k: utility_test
+  math500: utility_test
+
+# Allocated in this order. quota: stratum -> count (null = allowed, uncapped, rides along with capped strata).
+roles:
+  harm_test:                        # minimum held-out JBB/AdvBench behaviours; remainder adds more below
+    sources: [advbench]
+    quota: {harmful: 150}
+  overrefusal_test:
+    sources: [orbench_hard]
+    quota: {alarming_benign: 300}
+  direction:                        # direction + probe estimation (~200 per stratum)
+    sources: [jbb_harmful, jbb_benign, advbench, orbench_hard, orbench_toxic, alpaca, coconot_original, coconot_contrast]
+    prefer_sources: [jbb_harmful, jbb_benign]   # topic-matched pairs first
+    quota: {harmful: 200, alarming_benign: 200, benign: 200}
+  probe_val:
+    sources: [advbench, orbench_hard, orbench_toxic, alpaca, coconot_original, coconot_contrast]
+    quota: {harmful: 100, alarming_benign: 100, benign: 100}
+  selector_dev:                     # Stage A/B outcome development prompts
+    sources: [advbench, orbench_hard, orbench_toxic, alpaca, coconot_original, coconot_contrast]
+    quota: {harmful: 100, alarming_benign: 100, benign: 100}
+  tuning:                           # target-model behavioural tuning pool (nested subsets below)
+    sources: [advbench, orbench_hard, orbench_toxic, alpaca, coconot_original, coconot_contrast]
+    quota: {harmful: 64, alarming_benign: 64, benign: 64}
+  modification_train:               # cue-arm / natural-policy fine-tuning data ([1]-style)
+    sources: [advbench, orbench_hard, alpaca]
+    quota: {harmful: 150, alarming_benign: 200, benign: 400}
+
+remainder:
+  - {role: harm_test, sources: [advbench]}
+  - {role: overrefusal_test, sources: [orbench_hard]}
+  - {role: alphasteer_fit, sources: [alpaca, coconot_original, coconot_contrast, orbench_toxic]}
+
+nested_subsets:
+  tuning:
+    strata: [harmful, alarming_benign, benign]
+    sizes: [24, 48, 96, 192]
+  selector_dev:                     # frozen small subsets for exhaustive development sweeps
+    strata: [harmful, alarming_benign, benign]
+    sizes: [30, 90, 300]

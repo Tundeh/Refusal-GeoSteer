@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geosteer"
+version = "0.1.0"
+description = "Does harmfulness-refusal geometry improve safety-steering selection?"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.1",
+    "transformers>=4.45",
+    "datasets>=2.18",
+    "huggingface_hub>=0.23",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "pyyaml",
+    "safetensors",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[tool.setuptools.packages.find]
+include = ["geosteer*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "model: loads a (small, locally cached) HF tokenizer or model",
+    "gpu: requires a CUDA device",
+]
