@@ -3,8 +3,8 @@
     python scripts/build_data.py --config configs/data.yaml
 
 Outputs (under $GEOSTEER_DATA_DIR, default ./data):
-    processed/<role>.jsonl      records per role
-    processed/split_ids.json    uid lists per role and nested subset (commit this)
+    processed/<stage>/<role>.jsonl  records per role, grouped by stage (directions / repair / test)
+    processed/split_ids.json        uid lists and file paths per role, nested subsets (commit this)
     processed/manifest.json     provenance, dedup audit, counts, file hashes (commit this)
 """
 
@@ -59,12 +59,24 @@ def main() -> None:
         subs = nested_subsets(result.roles[role], sc["sizes"], sc["strata"], seed, name=role)
         subsets[role] = {str(n): ids for n, ids in subs.items()}
 
-    files = {}
-    for role, recs in sorted(result.roles.items()):
-        path = write_jsonl((r.to_dict() for r in recs), out / f"{role}.jsonl")
-        files[role] = sha256_file(path)
+    stage_of = {role: stage for stage, roles_ in cfg["stages"].items() for role in roles_}
+    missing = [r.name for r in roles if r.name not in stage_of] + [r for r in cfg["reserved"].values() if r not in stage_of]
+    if missing:
+        raise SystemExit(f"roles without a stage in config: {sorted(set(missing))}")
+    # Remove previously generated split files so dropped roles don't linger.
+    for old in out.rglob("*.jsonl"):
+        old.unlink()
+    files, sha = {}, {}
+    for role, stage in stage_of.items():
+        rel = f"{stage}/{role}.jsonl"
+        sha[role] = sha256_file(write_jsonl((r.to_dict() for r in result.roles.get(role, [])), out / rel))
+        files[role] = rel
+    not_written = {role: len(recs) for role, recs in result.roles.items() if role not in stage_of}
+    if not_written:
+        log.info("not written (no stage): %s", not_written)
 
-    write_json({"roles": {role: [r.uid for r in recs] for role, recs in sorted(result.roles.items())},
+    write_json({"files": files,
+                "roles": {role: [r.uid for r in result.roles.get(role, [])] for role in stage_of},
                 "subsets": subsets}, out / "split_ids.json")
     counts = result.counts()
     write_json({
@@ -76,7 +88,10 @@ def main() -> None:
         "reserved_conflicts": result.reserved_conflicts,
         "shortfalls": result.shortfalls,
         "counts": counts,
-        "file_sha256": files,
+        "stages": cfg["stages"],
+        "files": files,
+        "file_sha256": sha,
+        "not_written": not_written,
     }, out / "manifest.json")
 
     for role, c in sorted(counts.items()):

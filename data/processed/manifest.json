@@ -1,0 +1,630 @@
+{
+  "created": "2026-11-08T14:12:05+00:00",
+  "config_file": "configs/data.yaml",
+  "config": {
+    "seed": 20261108,
+    "dedup_threshold": 0.8,
+    "sources": {
+      "jbb_harmful": {},
+      "jbb_benign": {},
+      "advbench": {},
+      "orbench_hard": {},
+      "orbench_toxic": {},
+      "alpaca": {
+        "max_records": 1000
+      },
+      "sorry_bench": {},
+      "xstest": {},
+      "gsm8k": {},
+      "alpaca_eval": {}
+    },
+    "stages": {
+      "directions": [
+        "direction"
+      ],
+      "repair": [
+        "repair"
+      ],
+      "test": [
+        "harm_test",
+        "overrefusal_test",
+        "utility_test"
+      ]
+    },
+    "reserved": {
+      "sorry_bench": "harm_test",
+      "xstest": "overrefusal_test",
+      "alpaca_eval": "utility_test",
+      "gsm8k": "utility_test"
+    },
+    "roles": {
+      "harm_test": {
+        "sources": [
+          "advbench"
+        ],
+        "quota": {
+          "harmful": 150
+        }
+      },
+      "overrefusal_test": {
+        "sources": [
+          "orbench_hard"
+        ],
+        "quota": {
+          "alarming_benign": 300
+        }
+      },
+      "direction": {
+        "sources": [
+          "jbb_harmful",
+          "jbb_benign",
+          "advbench",
+          "orbench_hard",
+          "orbench_toxic",
+          "alpaca"
+        ],
+        "prefer_sources": [
+          "jbb_harmful",
+          "jbb_benign"
+        ],
+        "quota": {
+          "harmful": 200,
+          "alarming_benign": 200,
+          "benign": 200
+        }
+      },
+      "repair": {
+        "sources": [
+          "advbench",
+          "orbench_hard",
+          "orbench_toxic",
+          "alpaca"
+        ],
+        "quota": {
+          "harmful": 100,
+          "alarming_benign": 100,
+          "benign": 100
+        }
+      }
+    },
+    "nested_subsets": {
+      "repair": {
+        "strata": [
+          "harmful",
+          "alarming_benign",
+          "benign"
+        ],
+        "sizes": [
+          24,
+          48,
+          96,
+          192
+        ]
+      }
+    }
+  },
+  "provenance": {
+    "jbb_harmful": {
+      "origin": "huggingface",
+      "repo": "JailbreakBench/JBB-Behaviors",
+      "revision": "886acc352a31533ffbcf4ef22c744658688086fc",
+      "file": "data/harmful-behaviors.csv",
+      "sha256": "4a8ec6832056b631eb092dccc60d37a61c3d441268268888b3d006288afeffa1",
+      "n_empty_dropped": 0,
+      "n_loaded": 100,
+      "n_exact_duplicates_dropped": 0
+    },
+    "jbb_benign": {
+      "origin": "huggingface",
+      "repo": "JailbreakBench/JBB-Behaviors",
+      "revision": "886acc352a31533ffbcf4ef22c744658688086fc",
+      "file": "data/benign-behaviors.csv",
+      "sha256": "3cda234d21a991fa309bbfea4b6d9dae31ccdf8e9d452424b6a983e4fdc33468",
+      "n_empty_dropped": 0,
+      "n_loaded": 100,
+      "n_exact_duplicates_dropped": 0
+    },
+    "advbench": {
+      "origin": "github",
+      "url": "https://raw.githubusercontent.com/llm-attacks/llm-attacks/098262edf85f807224e70ecd87b9d83716bf6b73/data/advbench/harmful_behaviors.csv",
+      "sha256": "6cd1a5c63c07610d7eb67307772ee5606017ee950b5770ab288a2c487489d3e1",
+      "n_empty_dropped": 0,
+      "n_loaded": 520,
+      "n_exact_duplicates_dropped": 0
+    },
+    "orbench_hard": {
+      "origin": "huggingface",
+      "repo": "bench-llm/or-bench",
+      "revision": "e36d8b80e81837c8a8f264bbb2a49f1b32c7e272",
+      "file": "or-bench-hard-1k.csv",
+      "sha256": "a6e2f1166416efe5901f3bb05c47dc92ab3aca3acfe143693d38b8057d841e6d",
+      "n_empty_dropped": 0,
+      "n_loaded": 1319,
+      "n_exact_duplicates_dropped": 0
+    },
+    "orbench_toxic": {
+      "origin": "huggingface",
+      "repo": "bench-llm/or-bench",
+      "revision": "e36d8b80e81837c8a8f264bbb2a49f1b32c7e272",
+      "file": "or-bench-toxic.csv",
+      "sha256": "3be45901faae3b4b2b51bf7f8a2784c1650a1cc8c631dbc8b171d5312d4e0057",
+      "n_empty_dropped": 0,
+      "n_loaded": 655,
+      "n_exact_duplicates_dropped": 0
+    },
+    "alpaca": {
+      "origin": "huggingface",
+      "repo": "tatsu-lab/alpaca",
+      "revision": "dce01c9b08f87459cf36a430d809084718273017",
+      "file": "data/train-00000-of-00001-a09b74b3ef9c3b56.parquet",
+      "sha256": "06391b656a06fd3fb9d213160ef2398796c3b7f3dc75ef1e3ced30d461517073",
+      "notes": "kept rows with empty input only",
+      "n_empty_dropped": 0,
+      "n_loaded": 31323,
+      "n_exact_duplicates_dropped": 0,
+      "subsampled_to": 1000
+    },
+    "sorry_bench": {
+      "origin": "github",
+      "url": "https://raw.githubusercontent.com/CHATS-lab/LLMs_Encode_Harmfulness_Refusal_Separately/eff841e063e5a59b8dbc094060923005393b1c36/data/sorry-badq.json",
+      "sha256": "0e9bf033ecf80e3b73adfb702e3214de13c74330d7b589880f396fabd99c5072",
+      "notes": "fallback: HF repo gated; subset redistributed by [2]",
+      "n_empty_dropped": 0,
+      "n_loaded": 440,
+      "n_exact_duplicates_dropped": 0
+    },
+    "xstest": {
+      "origin": "github",
+      "url": "https://raw.githubusercontent.com/paul-rottger/xstest/d7bb5bd738c1fcbc36edd83d5e7d1b71a3e2d84d/xstest_prompts.csv",
+      "sha256": "11783fb294ed017473ee53c207d71f2161c7672c8d0b037501e78387f801cb5a",
+      "n_empty_dropped": 0,
+      "n_loaded": 450,
+      "n_exact_duplicates_dropped": 0
+    },
+    "gsm8k": {
+      "origin": "huggingface",
+      "repo": "openai/gsm8k",
+      "revision": "740312add88f781978c0658806c59bc2815b9866",
+      "file": "main/test-00000-of-00001.parquet",
+      "sha256": "ee7b8da9e381df27b9e3f7758a159ab2bdaa4dbaa910546cbbc47e0cb44e4f59",
+      "n_empty_dropped": 0,
+      "n_loaded": 1319,
+      "n_exact_duplicates_dropped": 0
+    },
+    "alpaca_eval": {
+      "origin": "huggingface",
+      "repo": "tatsu-lab/alpaca_eval",
+      "revision": "2edc6fad8be6b14ea7230aabfd08188da6b8b814",
+      "file": "alpaca_eval.json",
+      "sha256": "d92b92c51e8f1962a21193abe74e6f727c2bc8286035f4041505ff38a7c3ae51",
+      "n_empty_dropped": 0,
+      "n_loaded": 805,
+      "n_exact_duplicates_dropped": 0
+    }
+  },
+  "dedup": {
+    "threshold": 0.8,
+    "n_records": 6708,
+    "n_groups_before": 6358,
+    "n_groups_after": 6272,
+    "n_exact_pairs": 22,
+    "n_near_pairs": 155,
+    "cross_source_pairs": {
+      "advbench|jbb_harmful": 17,
+      "advbench|sorry_bench": 17,
+      "jbb_harmful|sorry_bench": 3,
+      "jbb_benign|jbb_harmful": 1
+    },
+    "largest_groups": [
+      [
+        "alpaca_eval:100",
+        15
+      ],
+      [
+        "advbench:141",
+        7
+      ],
+      [
+        "xstest:discr:14",
+        6
+      ],
+      [
+        "advbench:236",
+        4
+      ],
+      [
+        "advbench:297",
+        4
+      ],
+      [
+        "advbench:113",
+        4
+      ],
+      [
+        "advbench:10",
+        3
+      ],
+      [
+        "advbench:28",
+        3
+      ],
+      [
+        "advbench:43",
+        3
+      ],
+      [
+        "advbench:27",
+        3
+      ]
+    ],
+    "near_pair_examples": [
+      [
+        "jbb_harmful:11",
+        "advbench:10",
+        1.0
+      ],
+      [
+        "jbb_harmful:12",
+        "advbench:28",
+        1.0
+      ],
+      [
+        "jbb_harmful:20",
+        "advbench:7",
+        1.0
+      ],
+      [
+        "jbb_harmful:25",
+        "advbench:27",
+        1.0
+      ],
+      [
+        "jbb_harmful:26",
+        "advbench:34",
+        1.0
+      ],
+      [
+        "jbb_harmful:38",
+        "advbench:32",
+        1.0
+      ],
+      [
+        "jbb_harmful:39",
+        "advbench:33",
+        1.0
+      ],
+      [
+        "jbb_harmful:61",
+        "advbench:268",
+        1.0
+      ],
+      [
+        "jbb_harmful:63",
+        "sorry_bench:85",
+        1.0
+      ],
+      [
+        "jbb_harmful:63",
+        "advbench:297",
+        1.0
+      ],
+      [
+        "jbb_harmful:70",
+        "advbench:12",
+        1.0
+      ],
+      [
+        "jbb_harmful:75",
+        "advbench:93",
+        1.0
+      ],
+      [
+        "jbb_harmful:76",
+        "advbench:57",
+        1.0
+      ],
+      [
+        "advbench:52",
+        "sorry_bench:189",
+        1.0
+      ],
+      [
+        "advbench:178",
+        "sorry_bench:146",
+        1.0
+      ],
+      [
+        "advbench:270",
+        "sorry_bench:63",
+        1.0
+      ],
+      [
+        "advbench:297",
+        "sorry_bench:85",
+        1.0
+      ],
+      [
+        "advbench:325",
+        "sorry_bench:72",
+        1.0
+      ],
+      [
+        "advbench:331",
+        "sorry_bench:207",
+        1.0
+      ],
+      [
+        "advbench:382",
+        "sorry_bench:54",
+        1.0
+      ],
+      [
+        "advbench:385",
+        "sorry_bench:103",
+        1.0
+      ],
+      [
+        "advbench:397",
+        "sorry_bench:24",
+        1.0
+      ],
+      [
+        "advbench:430",
+        "sorry_bench:386",
+        1.0
+      ],
+      [
+        "advbench:512",
+        "sorry_bench:53",
+        1.0
+      ],
+      [
+        "alpaca_eval:52",
+        "alpaca_eval:58",
+        0.9434
+      ],
+      [
+        "advbench:422",
+        "sorry_bench:104",
+        0.9403
+      ],
+      [
+        "advbench:202",
+        "advbench:345",
+        0.9245
+      ],
+      [
+        "advbench:283",
+        "advbench:490",
+        0.9131
+      ],
+      [
+        "gsm8k:418",
+        "gsm8k:558",
+        0.9075
+      ],
+      [
+        "jbb_harmful:53",
+        "sorry_bench:362",
+        0.9043
+      ],
+      [
+        "jbb_harmful:38",
+        "advbench:294",
+        0.9032
+      ],
+      [
+        "advbench:32",
+        "advbench:294",
+        0.9032
+      ],
+      [
+        "advbench:113",
+        "advbench:390",
+        0.9008
+      ],
+      [
+        "advbench:217",
+        "advbench:519",
+        0.8975
+      ],
+      [
+        "advbench:195",
+        "advbench:464",
+        0.8972
+      ],
+      [
+        "advbench:1",
+        "advbench:381",
+        0.8882
+      ],
+      [
+        "jbb_harmful:13",
+        "advbench:43",
+        0.8843
+      ],
+      [
+        "advbench:343",
+        "sorry_bench:381",
+        0.8812
+      ],
+      [
+        "advbench:8",
+        "advbench:475",
+        0.8796
+      ],
+      [
+        "advbench:403",
+        "advbench:460",
+        0.8754
+      ],
+      [
+        "advbench:306",
+        "sorry_bench:147",
+        0.8753
+      ],
+      [
+        "alpaca_eval:77",
+        "alpaca_eval:100",
+        0.8699
+      ],
+      [
+        "advbench:170",
+        "advbench:224",
+        0.8696
+      ],
+      [
+        "orbench_hard:192",
+        "orbench_hard:196",
+        0.8628
+      ],
+      [
+        "alpaca_eval:9",
+        "alpaca_eval:58",
+        0.8627
+      ],
+      [
+        "alpaca_eval:9",
+        "alpaca_eval:52",
+        0.8627
+      ],
+      [
+        "alpaca_eval:12",
+        "alpaca_eval:58",
+        0.8627
+      ],
+      [
+        "alpaca_eval:12",
+        "alpaca_eval:52",
+        0.8627
+      ],
+      [
+        "alpaca_eval:52",
+        "alpaca_eval:57",
+        0.8627
+      ],
+      [
+        "alpaca_eval:57",
+        "alpaca_eval:58",
+        0.8627
+      ]
+    ]
+  },
+  "reserved_conflicts": [],
+  "shortfalls": {},
+  "counts": {
+    "utility_test": {
+      "n": 2124,
+      "n_groups": 2109,
+      "by_stratum": {
+        "benign": 2124
+      },
+      "by_source": {
+        "alpaca_eval": 805,
+        "gsm8k": 1319
+      }
+    },
+    "overrefusal_test": {
+      "n": 750,
+      "n_groups": 497,
+      "by_stratum": {
+        "alarming_benign": 550,
+        "harmful": 200
+      },
+      "by_source": {
+        "orbench_hard": 300,
+        "xstest": 450
+      }
+    },
+    "harm_test": {
+      "n": 613,
+      "n_groups": 585,
+      "by_stratum": {
+        "harmful": 610,
+        "alarming_benign": 3
+      },
+      "by_source": {
+        "advbench": 167,
+        "jbb_benign": 3,
+        "jbb_harmful": 3,
+        "sorry_bench": 440
+      }
+    },
+    "direction": {
+      "n": 600,
+      "n_groups": 486,
+      "by_stratum": {
+        "harmful": 200,
+        "benign": 200,
+        "alarming_benign": 200
+      },
+      "by_source": {
+        "advbench": 17,
+        "alpaca": 200,
+        "jbb_benign": 97,
+        "jbb_harmful": 97,
+        "orbench_hard": 103,
+        "orbench_toxic": 86
+      }
+    },
+    "repair": {
+      "n": 300,
+      "n_groups": 298,
+      "by_stratum": {
+        "benign": 100,
+        "alarming_benign": 100,
+        "harmful": 100
+      },
+      "by_source": {
+        "alpaca": 100,
+        "orbench_hard": 100,
+        "orbench_toxic": 100
+      }
+    },
+    "unassigned": {
+      "n": 2321,
+      "n_groups": 2297,
+      "by_stratum": {
+        "harmful": 805,
+        "benign": 700,
+        "alarming_benign": 816
+      },
+      "by_source": {
+        "advbench": 336,
+        "alpaca": 700,
+        "orbench_hard": 816,
+        "orbench_toxic": 469
+      }
+    }
+  },
+  "stages": {
+    "directions": [
+      "direction"
+    ],
+    "repair": [
+      "repair"
+    ],
+    "test": [
+      "harm_test",
+      "overrefusal_test",
+      "utility_test"
+    ]
+  },
+  "files": {
+    "direction": "directions/direction.jsonl",
+    "repair": "repair/repair.jsonl",
+    "harm_test": "test/harm_test.jsonl",
+    "overrefusal_test": "test/overrefusal_test.jsonl",
+    "utility_test": "test/utility_test.jsonl"
+  },
+  "file_sha256": {
+    "direction": "eb356de49c36eb01e9f3305dde8bf958b70bde8c1d51cf915d46a4c82e631a0a",
+    "repair": "5fe44af81888441b6dd6be43d0e024d6f98ab90b167aec097fb84a7deda20d0d",
+    "harm_test": "e27f33dd47d0c25a25ccf3889550565db61487be5acfe6f80e45426fdda8510d",
+    "overrefusal_test": "e68e2ba84896767f70862c7c7bd59b19a68bbc558328a7d719a6e8ad90109515",
+    "utility_test": "ccdf4415728b222f259c1070be8e9660d939b8f481526be58271012acb2ebf7d"
+  },
+  "not_written": {
+    "unassigned": 2321
+  }
+}

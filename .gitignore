@@ -3,5 +3,5 @@ __pycache__/
 .pytest_cache/
 # Raw/processed data are re-derivable from pinned sources; the split manifest is committed.
 data/raw/
-data/processed/*.jsonl
+data/processed/**/*.jsonl
 artifacts/
