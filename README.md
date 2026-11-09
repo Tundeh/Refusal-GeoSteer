@@ -54,6 +54,8 @@ python scripts/extract_activations.py --model qwen2.5-1.5b --role direction --de
 python scripts/generate.py            --model qwen2.5-1.5b --role direction --device cuda:0
 python scripts/judge_refusals.py      --model qwen2.5-1.5b --role direction --device cuda:1   # judge: qwen2.5-7b
 python scripts/compute_geometry.py    --model qwen2.5-1.5b --role direction
+python scripts/compute_geometry.py    --model qwen2.5-1.5b --budget 100 --budget-weights 1:2:1   # data budget
+python scripts/budget_sweep.py        --model qwen2.5-1.5b      # availability/precision vs budget
 pytest -q
 ```
 
@@ -71,6 +73,31 @@ Notes:
   within-cell (cross-)covariance trace from inner products and squared norms, with a group bootstrap that accounts
   for resampling weights. Rows with `reliable == False` (too many replicates with less signal than noise) should
   not be interpreted.
+
+# Data budgets
+
+`load_role(role, budget=N)` and `--budget N` use N prompts, balanced across harmful / alarming-benign / benign,
+deterministic and nested (budget 50 is a subset of budget 100). Defaults live under `budgets:` in `configs/data.yaml`.
+
+* **Direction estimation** may use a fixed stratum allocation (`--budget-weights 1:2:1`, or `budget_weights.direction`
+  in the config). Declare it before analysis and keep it identical across models and budgets: the mix changes what
+  r and d measure. **Repair** budgets are always balanced (`balanced_only_roles`), because repair is scored on harmful
+  compliance, over-refusal and utility together.
+* A contrast whose cells fall below `min_count` (20) is reported as unavailable. At small budgets that is a result
+  for H1, not something to engineer away.
+* `r_alarming` (alarming-benign refused − alarming-benign answered) holds alarming wording fixed as well as harm,
+  removing the OR-Bench-vs-Alpaca style confound in `r`.
+
+Budget sweep on the base models (5 draws per setting, t_post, layers at relative depth 0.25/0.5/0.75/0.9;
+"from N" = r vs d available and reliable in all draws; CI = median 95% width of the noise-corrected angle):
+
+| Model | r vs d, balanced | r vs d, 1:2:1 | CI at 300, balanced / 1:2:1 | CI at 600, balanced |
+|---|---|---|---|---|
+| Qwen2.5-1.5B | from 150 | from 100 (CI ~47°) | 21° / 23° | 13° |
+| Llama-3.2-1B | from 450 | from 300 | – / 34° | 16° |
+
+The 1:2:1 allocation makes r estimable at smaller budgets but costs precision on the harm side (fewer harmful
+prompts, fewer complete topic-matched pairs: `d_matched` becomes available later than under balanced budgets).
 
 # Alignment with refusal-vs-safety-signal
 

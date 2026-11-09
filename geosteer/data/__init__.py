@@ -1,4 +1,4 @@
-from geosteer.data.budget import budget_quota, budget_summary, select_budget
+from geosteer.data.budget import budget_quota, budget_summary, parse_weights, select_budget, weights_tag
 from geosteer.data.dedup import DedupReport, merge_duplicate_groups
 from geosteer.data.schema import PromptRecord, Stratum
 from geosteer.data.sources import SOURCES, LoadResult, load_source

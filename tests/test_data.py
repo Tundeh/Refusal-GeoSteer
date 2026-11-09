@@ -108,3 +108,32 @@ def test_budget_keeps_shared_group_pairs_together():
     h = {r.group_id for r in sel if r.stratum == Stratum.HARMFUL}
     b = {r.group_id for r in sel if r.stratum == Stratum.ALARMING_BENIGN}
     assert h == b
+
+
+def test_weighted_budget_quota_and_parsing():
+    from geosteer.data import budget_quota, parse_weights, weights_tag
+    S = (Stratum.HARMFUL, Stratum.ALARMING_BENIGN, Stratum.BENIGN)
+    assert budget_quota(100, S) == {Stratum.HARMFUL: 34, Stratum.ALARMING_BENIGN: 33, Stratum.BENIGN: 33}
+    w = parse_weights("1:2:1")
+    assert budget_quota(100, S, w) == {Stratum.HARMFUL: 25, Stratum.ALARMING_BENIGN: 50, Stratum.BENIGN: 25}
+    assert sum(budget_quota(7, S, w).values()) == 7
+    assert weights_tag(w) == "w1-2-1" and weights_tag(None) == "" and parse_weights("balanced") is None
+    with pytest.raises(ValueError):
+        parse_weights("1:2")
+    with pytest.raises(ValueError):
+        budget_quota(10, S, {"bogus": 1.0})
+
+
+def test_weighted_budget_nested_within_allocation():
+    from geosteer.data import parse_weights, select_budget
+    w = parse_weights("1:2:1")
+    a = select_budget(_pool(), 20, seed=1, weights=w)
+    b = select_budget(_pool(), 40, seed=1, weights=w)
+    assert {r.uid for r in a} < {r.uid for r in b}
+    assert Counter(r.stratum for r in a)[Stratum.ALARMING_BENIGN] == 10
+
+
+def test_repair_refuses_weighted_budget():
+    from geosteer.data import load_role
+    with pytest.raises(ValueError, match="balanced"):
+        load_role("repair", budget=30, budget_weights={"harmful": 1, "alarming_benign": 2, "benign": 1})

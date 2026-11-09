@@ -4,6 +4,8 @@ Contrasts (all at one layer and token position):
   d            harmful            - safe                     (unconditioned harmfulness)
   r            safe & refused     - safe & answered          (safe-only refusal, [1])
   r_harmful    harmful & refused  - harmful & answered       (sensitivity analysis)
+  r_alarming   alarming-benign & refused - alarming-benign & answered (harm *and* alarming wording
+               held fixed; removes the OR-Bench-vs-Alpaca style confound in r)
   d_refused    harmful & refused  - safe & refused           (harmfulness within a refusal stratum)
   d_answered   harmful & answered - safe & answered
   d_matched    harmful - safe, topic-matched pairs only (refusal-vs-safety-signal [1] style d)
@@ -31,10 +33,14 @@ CONTRASTS: dict[str, tuple[dict, dict]] = {
     "d": ({"harm": 1}, {"harm": 0}),
     "r": ({"harm": 0, "refused": 1}, {"harm": 0, "refused": 0}),
     "r_harmful": ({"harm": 1, "refused": 1}, {"harm": 1, "refused": 0}),
+    "r_alarming": ({"harm": 0, "alarming": True, "refused": 1}, {"harm": 0, "alarming": True, "refused": 0}),
     "d_refused": ({"harm": 1, "refused": 1}, {"harm": 0, "refused": 1}),
     "d_answered": ({"harm": 1, "refused": 0}, {"harm": 0, "refused": 0}),
     "d_matched": ({"harm": 1, "matched": True}, {"harm": 0, "matched": True}),
 }
+
+
+FLAG_KEYS = ("matched", "alarming")  # boolean per-example flags a contrast cell may condition on
 
 
 def unit(v: torch.Tensor, eps: float = 1e-12) -> torch.Tensor:
@@ -54,12 +60,18 @@ class Labels:
     harm: np.ndarray                  # [N] in {0,1}
     refused: np.ndarray | None        # [N] in {0,1} or NaN (unlabelled); None if not yet available
     groups: np.ndarray                # [N] behaviour-group ids
-    matched: np.ndarray | None = None  # [N] bool: member of a complete topic-matched harmful/benign pair
+    matched: np.ndarray | None = None   # [N] bool: member of a complete topic-matched harmful/benign pair
+    alarming: np.ndarray | None = None  # [N] bool: alarming-but-benign stratum
+
+    def flag(self, key: str) -> np.ndarray:
+        v = getattr(self, key)
+        return v if v is not None else np.zeros(len(self.harm), dtype=bool)
 
     def cell(self, spec: dict) -> np.ndarray:
         m = self.harm == spec["harm"]
-        if "matched" in spec:
-            m &= (self.matched if self.matched is not None else np.zeros_like(m)) == spec["matched"]
+        for key in FLAG_KEYS:
+            if key in spec:
+                m &= self.flag(key) == spec[key]
         if "refused" in spec:
             if self.refused is None:
                 return np.zeros_like(m)
@@ -168,7 +180,7 @@ class DebiasedCosine:
     """Noise-corrected cosine between two difference-of-means contrasts.
 
     Write each example as x_i = m_c(i) + e_i, with c the fine cell (harm, refused in
-    {0, 1, NaN}, matched). A contrast is r_hat = sum_i a_i x_i (a_i = +1/n_pos, -1/n_neg, 0), so
+    {0, 1, NaN}, and each flag in FLAG_KEYS). A contrast is r_hat = sum_i a_i x_i (a_i = +1/n_pos, -1/n_neg, 0), so
     E<r_hat, d_hat> = <r, d> + sum_c n_c a_c b_c tr Cov_c(x_r, x_d): estimation noise
     inflates both norms (and, where contrasts share examples, the inner product),
     pulling the plain cosine toward 0 / the angle toward 90 deg. We subtract the
@@ -188,13 +200,15 @@ class DebiasedCosine:
         ref = labels.refused if labels.refused is not None else np.full(len(labels.harm), np.nan)
         ref_cat = np.where(np.isnan(ref), -1, np.nan_to_num(ref, nan=-1)).astype(int)
         (rp, rn), (dp, dn) = CONTRASTS[r_name], CONTRASTS[d_name]
-        matched = labels.matched if labels.matched is not None else np.zeros(len(labels.harm), dtype=bool)
+        flags = [labels.flag(k) for k in FLAG_KEYS]
         self.cells = []
-        for h, rc, mt_flag in itertools.product((0, 1), (-1, 0, 1), (False, True)):
-            m = (labels.harm == h) & (ref_cat == rc) & (matched == mt_flag)
+        for h, rc, *fv in itertools.product((0, 1), (-1, 0, 1), *[(False, True)] * len(FLAG_KEYS)):
+            m = (labels.harm == h) & (ref_cat == rc)
+            for f, v in zip(flags, fv):
+                m &= f == v
             if not m.any():
                 continue
-            rep = {"harm": h, "refused": rc if rc >= 0 else math.nan, "matched": mt_flag}
+            rep = {"harm": h, "refused": rc if rc >= 0 else math.nan, **dict(zip(FLAG_KEYS, fv))}
             a = 1 if self._match(rp, rep) else (-1 if self._match(rn, rep) else 0)
             b = 1 if self._match(dp, rep) else (-1 if self._match(dn, rep) else 0)
             if a == 0 and b == 0:
@@ -215,7 +229,7 @@ class DebiasedCosine:
     def _match(spec: dict, rep: dict) -> bool:
         if rep["harm"] != spec["harm"]:
             return False
-        if "matched" in spec and rep["matched"] != spec["matched"]:
+        if any(k in spec and rep[k] != spec[k] for k in FLAG_KEYS):
             return False
         return "refused" not in spec or rep["refused"] == spec["refused"]
 

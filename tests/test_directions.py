@@ -114,3 +114,14 @@ def test_d_matched_uses_only_matched_pairs():
     assert d.available and d.n_pos + d.n_neg == 200
     row = geometry_row(X, X, lab, d_name="d_matched", n_boot=50)
     assert row["available"] and not np.isnan(row["theta_dc"])
+
+
+def test_r_alarming_conditions_on_stratum():
+    X, lab = synthetic()
+    lab.alarming = np.zeros(len(lab.harm), dtype=bool)
+    lab.alarming[::2] = True
+    r = contrast_direction(X, lab, "r_alarming", min_count=5)
+    expect = ((lab.harm == 0) & lab.alarming & ~np.isnan(lab.refused)).sum()
+    assert r.available and r.n_pos + r.n_neg == expect
+    row = geometry_row(X, X, lab, r_name="r_alarming", n_boot=50)
+    assert abs(row["theta_dc"] - 60) < 8  # same refusal axis as r in the synthetic data

@@ -74,6 +74,14 @@ def resolve_dtype(name: str | torch.dtype) -> torch.dtype:
         raise ValueError(f"Unknown dtype {name!r}; expected one of {sorted(_DTYPES)}") from None
 
 
+def limit_cpu_threads(n: int | None = None) -> int:
+    """Cap torch CPU threads (default 8, or $GEOSTEER_NUM_THREADS). The geometry code runs many small
+    matrix products; with all 64 cores on a shared, loaded host, thread contention made it ~25x slower."""
+    n = n or int(os.environ.get("GEOSTEER_NUM_THREADS", 8))
+    torch.set_num_threads(n)
+    return n
+
+
 def resolve_device(device: str | None = None) -> torch.device:
     if device:
         return torch.device(device)

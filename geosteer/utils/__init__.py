@@ -16,6 +16,7 @@ from geosteer.utils.misc import (
     artifacts_dir,
     data_dir,
     get_logger,
+    limit_cpu_threads,
     load_config,
     project_path,
     resolve_device,

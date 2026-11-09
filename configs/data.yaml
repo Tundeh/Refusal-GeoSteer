@@ -59,3 +59,11 @@ nested_subsets:
 budgets:
   direction: null
   repair: null
+
+# Fixed stratum allocation for budgets, in stratum order harmful:alarming_benign:benign.
+# null = balanced. Declare before analysis and keep it identical across models and budgets:
+# the mix changes what r and d measure, so angles from different allocations are not comparable.
+budget_weights:
+  direction: null           # e.g. "1:2:1" puts half the budget on alarming-but-benign prompts
+# Repair is scored on harmful compliance, over-refusal and utility together, so it stays balanced (plan §4).
+balanced_only_roles: [repair]
